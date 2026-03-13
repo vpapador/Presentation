@@ -735,6 +735,16 @@ Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’
 
 </pre>
 
+Οι πίνακες για την β ποικιλότητα μπορούν να βρεθούν:
+```
+R
+head(wunifrac_within,10)
+head(wunifrac_df)
+head(wunifrac_within_TR,10)
+head(wunifrac_df_TR)
+```
+
+*προς το παρόν το workplace έχει σωθεί στο github.RData*
 
 ### Taxonomy
 
