@@ -295,7 +295,7 @@ for (size in names(subsets)) {
 
 Από αυτά, αποφασίζω να κρατήσω το subset των 500 για να είναι πιο balanced. Αυτοί δούλεψαν απλά με τα QC filtered, δηλαδή με τα αποτελέσματα του προηγούμενου κώδικα (subset_metadata). Μετά για prevalence distributions χρησιμοποιήσαν τα subsets των 2000. Ωστόσο, δούλεψαν με envo και ήταν πιο καλά αντιπροσωπευμένα. Εγώ αποφασίζω να δουλέψω με τα 500. Ωστόσο, αυτοί στο prevalence distributions δούλεψαν και με 30 samples από κάθε study. Samples από studies με μικρότερο από αυτόν τον αριθμό απορρίπτονταν. Εγώ για αρχή δεν το κάνω αυτό, μετά θα δω.
 
-### Tag Sequences
+### Tag Sequences- Rarefaction
 #### Πρόβλημα που πρέπει να λυθεί- δεύτερη γνώμη
 Εδώ αντιμετώπισα μία δυσκολία. Το paper αναφέρει ότι δούλεψαν με ASVs και καταλαβαίνω ότι είναι τα Tag seq με deblur90bp. Ωστόσο, έχουν και δεδομένα από Silva και Greengenes. Εγώ πιστεύω ότι είναι το taxonomy των OTUs αυτό και όχι το taxonomy των ASVs ωστόσο δεν είμαι βέβαιη και δεν το διευκρινίζει. Από την άλλη οι αλληλουχίες fasta είναι διαφορετικές και για τα 3 .biome. Μπορώ να δουλέψω αποκλειστικά με τα tag seq έτσι και αλλιώς σε επίπεδο ~ είδους, αλλά για να δουλέψω σε μεγαλύτερες τάξεις πρέπει να λυθεί. Προσωρινά, έλυσα το πρόβλημα χρησιμοποιώντας το vsearch στο bash όπου έκανα εκ νέου taxonomy στα ASVs, απλά δεν ξέρω αν αυτό είναι σωστό δεδομένουν ότι έχω μόνο 90bp. Χρησιμοποίησα την Silva.
 
@@ -457,5 +457,282 @@ length(phy_tree(ps.rarefied)$tip.label)
 setdiff(taxa_names(ps.rarefied), phy_tree(ps.rarefied)$tip.label)
 ```
 
+### Alpha Diversity
+#### Τι έκαναν αυτοί:
+
+- μετατροπή numeric predictors σε quartiles
+- φίλτρο κατηγοριών (<0.3% samples removed)
+- Mann–Whitney pairwise tests
+- pooled p-values ανά predictor
+- Benjamini–Hochberg correction
+- effect size (Cohen's d)
+
+Δεν θα χρησιμοποιήσω το Phyloseq γιατί δεν υποστηρίζει το FaithPD. Αντίθετα θα υπολογίσω τους δείκτες Chao1, Shannon, FaithPD, Observed ξεχωριστικά και θα φτιάξω ένα dataframe ώστε να είναι πάντα διαθέσιμο με το όνομα alpha_meta όπου θα έχω και περιβαλλοντικές μεταβλητές+ study_id διαθέσιμα για στατιστική ανάλυση.
+
+```
+R
+library("ape")
+library("nlme")
+library("picante")
+otu_tab <- t(otu_table(ps.rarefied))
+tree <- phy_tree(ps.rarefied)
+pd_results <- pd(otu_tab, tree, include.root = TRUE)
+head(pd_results)
+alpha <- estimate_richness(ps.rarefied, measures=c("Observed","Shannon","Chao1"))
+head(alpha)
+alpha$FaithPD <- pd_results$PD
+library(ggplot2)
+library(gridExtra)
+alpha_subset <- alpha
+alpha_subset$envo_biome_2 <- sample_data(ps.rarefied)$Biome
+
+# Δημιουργούμε τα plots
+p1 <- ggplot(alpha_subset,
+             aes(x = reorder(envo_biome_2, Shannon, median),
+                 y = Shannon)) +
+  geom_boxplot() +
+  theme_bw() +
+  coord_flip() +
+  ggtitle("Shannon")
+
+p2 <- ggplot(alpha_subset,
+             aes(x = reorder(envo_biome_2, Chao1, median),
+                 y = Chao1)) +
+  geom_boxplot() +
+  theme_bw() +
+  coord_flip() +
+  ggtitle("Chao1")
+
+p3 <- ggplot(alpha_subset,
+             aes(x = reorder(envo_biome_2, FaithPD, median),
+                 y = FaithPD)) +
+  geom_boxplot() +
+  theme_bw() +
+  coord_flip() +
+  ggtitle("Faith PD")
+
+p4 <- ggplot(alpha_subset,
+             aes(x = reorder(envo_biome_2, Observed, median),
+                 y = Observed)) +
+  geom_boxplot() +
+  theme_bw() +
+  coord_flip() +
+  ggtitle("Observed OTUs")
+
+#Άλφα ποικιλότητα metadata
+meta <- as(sample_data(ps.rarefied), "data.frame")
+alpha$SampleID <- rownames(alpha)
+alpha_meta <- merge(alpha, meta, by.x="SampleID", by.y="row.names")
+head(alpha_meta)
+alpha_meta$FaithPD <- alpha_meta$FaithPD.x
+alpha_meta <- alpha_meta %>% select(-FaithPD.x, -FaithPD.y)
+
+```
+
+
+<img width="1106" height="633" alt="image" src="https://github.com/user-attachments/assets/87382e81-7c33-4663-b83c-88be0c711302" />
+
+
+
+
+### Beta diversity
+#### Τι έκαναν αυτοί:
+
+- υπολογισμός UniFrac distances
+- PERMANOVA για κάθε predictor
+- mdFDR correction
+- effect size για significant predictors
+
+Εγώ χρησιμοποίησα έτοιμο το Phyloseq για να υπολογίσω unifrac weighted+unweighted
+
+```
+R
+wunifrac_dist = distance(ps.rarefied, method="unifrac", weighted=F)
+ordination = ordinate(ps.rarefied, method="PCoA", distance=wunifrac_dist)
+plot_ordination(ps.rarefied, ordination, color="Biome") + theme(aspect.ratio=1)
+
+```
+
+<img width="1180" height="633" alt="image" src="https://github.com/user-attachments/assets/ae7cfd31-b81f-44e5-be98-78b7c0c0d228" />
+
+
+Μπορώ να κάνω boxplots
+
+```
+R
+# Μετατρέπουμε το dist object σε matrix
+wunifrac_mat <- as.matrix(wunifrac_dist)
+
+# Φτιάχνουμε ένα data.frame με όλα τα ζεύγη
+wunifrac_df <- as.data.frame(as.table(wunifrac_mat))
+colnames(wunifrac_df) <- c("Sample1", "Sample2", "Distance")
+
+# Προσθέτουμε Biome info
+biome_info <- data.frame(Sample = sample_names(ps.rarefied),
+                         Biome = sample_data(ps.rarefied)$Biome,
+                         stringsAsFactors = FALSE)
+
+wunifrac_df <- wunifrac_df %>%
+  left_join(biome_info, by = c("Sample1" = "Sample")) %>%
+  rename(Biome1 = Biome) %>%
+  left_join(biome_info, by = c("Sample2" = "Sample")) %>%
+  rename(Biome2 = Biome)
+
+# Επιλέγουμε μόνο τις **διασταυρώσεις εντός του ίδιου Biome** (προαιρετικό)
+wunifrac_within <- wunifrac_df %>% filter(Biome1 == Biome2)
+
+
+ggplot(wunifrac_within, aes(x = Biome1, y = Distance)) +
+  geom_boxplot() +
+  theme_bw() +
+  coord_flip() +
+  ylab("Unweighted UniFrac distance") +
+  xlab("Biome") +
+  ggtitle("Within-biome β diversity")
+
+```
+
+
+<img width="1106" height="633" alt="image" src="https://github.com/user-attachments/assets/6a84f388-e491-4dde-81ab-164a841b8a07" />
+
+
+
+
+Πρέπει να κάνω έναν έλεγχο να δω εάν τα samples εμφανίζονται μέσα στο phyloseq object με την σειρά
+```
+R
+# Παίρνουμε τα ονόματα samples από το phyloseq object
+phy_samples <- sample_names(ps.rarefied)
+# Παίρνουμε τα rownames του sample_data
+meta_samples <- rownames(as(sample_data(ps.rarefied), "data.frame"))
+# Ελέγχουμε αν είναι ίδια και με την ίδια σειρά
+all(phy_samples == meta_samples)
+```
+
+<pre>
+> all(phy_samples == meta_samples)
+[1] TRUE
+</pre>
+
+
+
+Μετά μπορώ να κάνω ανάλυση permanova και να δω εάν τα Biomes διαφέρουν σημαντικά στη σύνθεση των κοινοτήτων τους
+```
+R
+adonis2(wunifrac_dist~sample_data(ps.rarefied)$Biome)
+```
+
+<pre> 
+> adonis2(wunifrac_dist~sample_data(ps.rarefied)$Biome)   
+Permutation test for adonis under reduced model
+Permutation: free
+Number of permutations: 999
+
+adonis2(formula = wunifrac_dist ~ sample_data(ps.rarefied)$Biome)
+          Df SumOfSqs      R2      F Pr(>F)    
+Model      5   15.319 0.08448 9.1163  0.001 ***
+Residual 494  166.023 0.91552                  
+Total    499  181.342 1.00000                  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1  
+</pre>
+
+Τι επιπλέον κάνουν αυτοί στο paper
+- Κάνουν pairwise comparisons για κάθε κατηγορία.
+- Εφαρμόζουν mdFDR για να ελέγξουν false positives σε πολλές συγκρίσεις.
+- Υπολογίζουν effect size για κάθε παράγοντα.
+
+Το ίδιο έκανα και για weighted unifraq:
+```
+R
+wunifrac_dist_TR = distance(ps.rarefied, method="unifrac", weighted=T)
+ordination_TR = ordinate(ps.rarefied, method="PCoA", distance=wunifrac_dist_TR)
+plot_ordination(ps.rarefied, ordination_TR, color="Biome") + theme(aspect.ratio=1)
+```
+
+<img width="821" height="687" alt="image" src="https://github.com/user-attachments/assets/cb7d4a6c-1de0-430f-82fe-341010149e2a" />
+
+
+
+
+
+Επαναλαμβάνω την ίδια διαδικασία για να πάρω τα boxplots
+```
+R
+# Μετατρέπουμε το dist object σε matrix
+wunifrac_mat_TR <- as.matrix(wunifrac_dist_TR)
+
+# Φτιάχνουμε ένα data.frame με όλα τα ζεύγη
+wunifrac_df_TR <- as.data.frame(as.table(wunifrac_mat_TR))
+colnames(wunifrac_df_TR) <- c("Sample1", "Sample2", "Distance")
+
+# Προσθέτουμε Biome info
+biome_info <- data.frame(Sample = sample_names(ps.rarefied),
+                         Biome = sample_data(ps.rarefied)$Biome,
+                         stringsAsFactors = FALSE)
+
+wunifrac_df_TR <- wunifrac_df_TR %>%
+  left_join(biome_info, by = c("Sample1" = "Sample")) %>%
+  rename(Biome1 = Biome) %>%
+  left_join(biome_info, by = c("Sample2" = "Sample")) %>%
+  rename(Biome2 = Biome)
+
+# Επιλέγουμε μόνο τις **διασταυρώσεις εντός του ίδιου Biome** (προαιρετικό)
+wunifrac_within_TR <- wunifrac_df_TR %>% filter(Biome1 == Biome2)
+head(wunifrac_within_TR,10)
+head(wunifrac_df_TR)
+
+ggplot(wunifrac_within_TR, aes(x = Biome1, y = Distance)) +
+  geom_boxplot() +
+  theme_bw() +
+  coord_flip() +
+  ylab("Weighted UniFrac distance") +
+  xlab("Biome") +
+  ggtitle("Within-biome β diversity")
+```
+
+<img width="920" height="687" alt="image" src="https://github.com/user-attachments/assets/56884314-12f4-4c97-8664-ac02dfc6d919" />
+
+
+
+
+Προχωράω σε ανάλυση PERMANOVA
+```
+R
+# Παίρνουμε τα ονόματα samples από το phyloseq object
+phy_samples <- sample_names(ps.rarefied)
+# Παίρνουμε τα rownames του sample_data
+meta_samples <- rownames(as(sample_data(ps.rarefied), "data.frame"))
+# Ελέγχουμε αν είναι ίδια και με την ίδια σειρά
+all(phy_samples == meta_samples)
+#επίσης ελέγχω αν τα samples στις αποστάσεις είναι με την ίδια σειρά όπως στα meta_samples
+all(labels(wunifrac_dist_TR) == meta_samples)
+#και αν είναι με την ίδια σειρά με τα samples στα reads
+all(labels(wunifrac_dist_TR) == rownames(sample_data(ps.rarefied)))
+labels(wunifrac_dist_TR)[1:10]
+
+
+adonis2(wunifrac_dist_TR~sample_data(ps.rarefied)$Biome)
+adonis2(wunifrac_dist_TR~sample_data(ps.rarefied)$Biome+ sample_data(ps.rarefied)$study_id )
+length(wunifrac_dist_TR)
+head(wunifrac_dist_TR)
+```
+
+
+<pre>
+> adonis2(wunifrac_dist_TR~sample_data(ps.rarefied)$Biome)
+Permutation test for adonis under reduced model
+Permutation: free
+Number of permutations: 999
+
+adonis2(formula = wunifrac_dist_TR ~ sample_data(ps.rarefied)$Biome)
+          Df SumOfSqs      R2    F Pr(>F)    
+Model      5   1.1298 0.23706 30.7  0.001 ***
+Residual 494   3.6359 0.76294                
+Total    499   4.7657 1.00000                
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+</pre>
 
 
