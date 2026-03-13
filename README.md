@@ -736,3 +736,25 @@ Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’
 </pre>
 
 
+### Taxonomy
+
+Για να κάνω το taxonomy δούλεψα σε linux και χρησιμοποίησα vsearch , το fasta file των 90bp deblur και την βάση δεδομένων SILVA.
+
+```
+bash
+module load gcc/14.2.0 vsearch/2.22.1
+
+#έλεγξα πόσα βακτήρια περιέχει
+grep -c "Bacteria" SILVA_138.2_SSURef_NR99_tax_silva.fasta
+#431166
+
+#Έκανα μια επεξεργασία το header του fasta ώστε να κλείσω το κενό
+sed '/^>/ s/ /|/' SILVA_138.2_SSURef_NR99_tax_silva.fasta > silva_fixed.fasta
+#και έπειτα έτρεξα την εντολή
+vsearch --usearch_global emp.90.min25.deblur.seq.fasta \
+        --db silva_fixed.fasta \
+        --id 0.97 \
+        --blast6out fixed_silva1.txt \
+        --strand plus --threads 4
+```
+
