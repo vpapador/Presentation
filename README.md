@@ -294,3 +294,168 @@ for (size in names(subsets)) {
 αυτοί είχαν setSizes = [1000, 2000, 5000, 10000]
 
 Από αυτά, αποφασίζω να κρατήσω το subset των 500 για να είναι πιο balanced. Αυτοί δούλεψαν απλά με τα QC filtered, δηλαδή με τα αποτελέσματα του προηγούμενου κώδικα (subset_metadata). Μετά για prevalence distributions χρησιμοποιήσαν τα subsets των 2000. Ωστόσο, δούλεψαν με envo και ήταν πιο καλά αντιπροσωπευμένα. Εγώ αποφασίζω να δουλέψω με τα 500. Ωστόσο, αυτοί στο prevalence distributions δούλεψαν και με 30 samples από κάθε study. Samples από studies με μικρότερο από αυτόν τον αριθμό απορρίπτονταν. Εγώ για αρχή δεν το κάνω αυτό, μετά θα δω.
+
+### Tag Sequences
+#### Πρόβλημα που πρέπει να λυθεί- δεύτερη γνώμη
+Εδώ αντιμετώπισα μία δυσκολία. Το paper αναφέρει ότι δούλεψαν με ASVs και καταλαβαίνω ότι είναι τα Tag seq με deblur90bp. Ωστόσο, έχουν και δεδομένα από Silva και Greengenes. Εγώ πιστεύω ότι είναι το taxonomy των OTUs αυτό και όχι το taxonomy των ASVs ωστόσο δεν είμαι βέβαιη και δεν το διευκρινίζει. Από την άλλη οι αλληλουχίες fasta είναι διαφορετικές και για τα 3 .biome. Μπορώ να δουλέψω αποκλειστικά με τα tag seq έτσι και αλλιώς σε επίπεδο ~ είδους, αλλά για να δουλέψω σε μεγαλύτερες τάξεις πρέπει να λυθεί. Προσωρινά, έλυσα το πρόβλημα χρησιμοποιώντας το vsearch στο bash όπου έκανα εκ νέου taxonomy στα ASVs, απλά δεν ξέρω αν αυτό είναι σωστό δεδομένουν ότι έχω μόνο 90bp. Χρησιμοποίησα την Silva.
+
+#### Sequencing depths- phyloseq
+Για να μπορέσω να προχωρήσω σε στατιστική ανάλυση, πρέπει να κάνω κανονικοποίηση. Επιλέγω να δημιουργήσω phyloseq object και να δουλέψω στην R. Έχω αποθηκεύσει το subset_500.csv και πάω στην Python. Από εκεί θα απομονώσω από το αρχικό .biom deblur_90bp μόνο τα 500 samples
+
+```
+Python
+!pip install biom-format
+#dont forget to restart the kernel
+
+#ανεβάζω τα δεδομένα μου
+import os
+os.chdir(r"C:\Users\User\Documents\emp_data_from_zenodo\Python_analysis")
+
+from biom import load_table
+table = load_table("emp_deblur_90bp.release1.biom")
+
+#τα μετατρέπω σε dataframe
+table.shape
+emp_deblur_90bp_release1 = table.to_dataframe()
+
+#Και στην συνέχεια φορτώνω τα 500 samples που έχω επιλέξει
+import pandas as pd
+# Φόρτωμα του CSV
+subset_500= pd.read_csv("subset_500.csv", sep=";")
+
+#Απομονώνω από το emp_deblur_90bp μόνο τα samples που με ενδιαφέρουν και στην συνέχεια αφαιρώ αυτά που έχουν 0 reads across the samples
+subset_500=emp_deblur_90bp_release1.loc[:, emp_deblur_90bp_release1.columns.isin(subset_500["X.SampleID"])]
+import numpy as np
+mask_h = np.any(subset_500.values, axis=1)
+subset_500= subset_500.loc[mask_h]
+subset_500.shape
+
+subset_500.to_csv("subset_final.csv", index=False, sep=";")
+```
+ Το πρώτο βήμα που έκανα, είναι να μετατρέψω το φιλτραρισμένο .csv file σε .biom
+ ```
+R
+library("phyloseq")
+library("ggplot2")
+library("permute")
+library("vegan")
+library("biomformat")
+#περιέχει τα 500 samples, και τις αλληλουχίες tag που εντοπίζονται μόνο στα 500
+
+subset_final<- read.table(file.choose(), header = TRUE, sep = "\t")
+dim(subset_final)
+head(subset_final,1)
+
+#μετατροπή σε .biom για να κάνω phyloseq_object
+subset_final_1<-subset_final
+otu_ids <- subset_final_1[,1]
+counts <- subset_final_1[,-1]
+counts <- data.frame(lapply(counts, as.numeric))
+rownames(counts) <- otu_ids
+mat <- as.matrix(counts)
+dim(mat)
+head(rownames(mat))
+otu_table <- make_biom(data = mat)
+otu_table
+write_biom(otu_table, "otu_table.biom")
+```
+
+To phyloseq object απαιτεί ακόμα τις αλληλουχίες .fasta όμως πρέπει να έχει ίδιο μέγεθος με το .biom. Οπότε πάω στην python
+
+```
+Python
+ids = set()
+
+# αυτό που κάνω είναι να διαβάσω το subset αρχείο και να προσθέτω την πρώτη στήλη στα ids (η πρώτη στήλη είναι αυτοί με τα tag)
+with open("subset_final.txt", "r") as f:
+    for line in f:
+        first_col = line.strip().split()[0]   # πρώτη στήλη
+        ids.add(first_col)
+
+filtered = []
+
+# στην συνέχεια διαβάζω το fasta και κρατάω μόνο τα headers+seq αν το header ταυτίζεται με τα ids
+with open("emp.90.min25.deblur.seq.fasta", "r") as f:
+    keep = False
+    for line in f:
+        if line.startswith(">"):
+            header = line[1:].strip()  # αφαιρούμε το >
+            keep = header in ids
+        if keep:
+            filtered.append(line)
+
+
+
+# δημιουργώ ένα νέο αρχείο fasta
+with open("filtered_sequences.fasta", "w") as out:
+    out.writelines(filtered)
+```
+Τώρα έχω όλα τα αρχεία που χρειάζομαι. Τα βάζω όλα μαζί locally στον φάκελο, αλλάζω το wd και έπειτα:
+
+```
+R
+ps = import_biom("tables.biom", treefilename="tree_rooted.tre", refseqfilename="otus.fasta")
+ps
+```
+
+Το επόμενο βήμα είναι να δημιουργήσω ένα αρχείο metadata ώστε να αντιστοιχίσω τα samples σε biomes.
+
+```
+R
+library("readr")
+subset_500 <- read_tsv("subset_500.txt", quote = "\"")
+str(subset_500)
+colnames(subset_500)
+
+subset_meta <- subset_500[, c("X.SampleID", "envo_biome_2", "study_id","latitude_deg", "longitude_deg", "elevation_m")]
+head(subset_meta)
+subset_meta$X.SampleID <- paste0("X", subset_meta$X.SampleID)
+
+subset_meta_1<-subset_meta
+subset_meta_1 <- data.frame(subset_meta_1)
+rownames(subset_meta_1) <- subset_meta_1$X.SampleID
+head(subset_meta_1)
+subset_meta_1 <- subset_meta_1[, c("envo_biome_2", "study_id", "latitude_deg", "longitude_deg", "elevation_m")]
+colnames(subset_meta_1)[colnames(subset_meta_1) == "envo_biome_2"] <- "Biome"
+sample_data(ps) <- sample_data(subset_meta_1)
+ps
+
+ps1<-ps
+str(sample_data(ps1))
+ps1
+sample_data(ps1)$latitude_deg  <- as.numeric(gsub(",", ".", sample_data(ps1)$latitude_deg))
+str(sample_data(ps1))
+```
+Τώρα μπορώ να κάνω rarefaction. Επιλέγω να κάνω στο 90% των reads του μικρότερου σε reads samples.
+
+```
+R
+#rarecurve(t(mat), step=50, cex=0.5) #κάνω έλεγχο
+#επειδή είναι πολύ μεγάλο επιλέγω τυχαία 50 samples
+set.seed(1)
+idx <- sample(1:nrow(t(mat)), 50)
+
+rarecurve(t(mat)[idx, ], step = 50, cex = 0.5)
+ps.rarefied = rarefy_even_depth(ps1, rngseed=1, sample.size=0.9*min(sample_sums(ps1)), replace=F)
+#αφαιρέθηκαν 27260 tag sequences από τα 98786
+sample_sums(ps.rarefied)
+```
+
+
+<img width="1206" height="633" alt="image" src="https://github.com/user-attachments/assets/485368c9-b9cd-4181-8937-80c4f50c4e67" />
+
+
+
+Ταυτόχρονα κάνω prunned το φυλογενετικό δέντρο ώστε να περιέχει μόνο τις rarified αλληλουχίες
+
+
+```
+R
+phy_tree(ps.rarefied) <- prune_taxa(taxa_names(ps.rarefied), phy_tree(ps.rarefied))
+head(phy_tree(ps.rarefied)$tip.label, 10)
+length(phy_tree(ps.rarefied)$tip.label)
+setdiff(taxa_names(ps.rarefied), phy_tree(ps.rarefied)$tip.label)
+```
+
+
+
