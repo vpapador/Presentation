@@ -444,7 +444,13 @@ sample_sums(ps.rarefied)
 ```
 
 
-<img width="1206" height="633" alt="image" src="https://github.com/user-attachments/assets/485368c9-b9cd-4181-8937-80c4f50c4e67" />
+
+
+
+![alt text](https://github.com/vpapador/Presentation/blob/a810e5aa5ee79285fce12885f67838dbd91925fb/rarefaction_curve.png)
+
+
+
 
 
 
@@ -534,7 +540,7 @@ alpha_meta <- alpha_meta %>% select(-FaithPD.x, -FaithPD.y)
 
 <img width="1106" height="633" alt="image" src="https://github.com/user-attachments/assets/87382e81-7c33-4663-b83c-88be0c711302" />
 
-
+![alt text](https://github.com/vpapador/Presentation/blob/a810e5aa5ee79285fce12885f67838dbd91925fb/alpha_div.png)
 
 
 ### Beta diversity
@@ -555,7 +561,12 @@ plot_ordination(ps.rarefied, ordination, color="Biome") + theme(aspect.ratio=1)
 
 ```
 
-<img width="1180" height="633" alt="image" src="https://github.com/user-attachments/assets/ae7cfd31-b81f-44e5-be98-78b7c0c0d228" />
+
+
+
+![alt text](https://github.com/vpapador/Presentation/blob/a810e5aa5ee79285fce12885f67838dbd91925fb/pca_unweighted.png)
+
+
 
 
 Μπορώ να κάνω boxplots
@@ -595,8 +606,8 @@ ggplot(wunifrac_within, aes(x = Biome1, y = Distance)) +
 ```
 
 
-<img width="1106" height="633" alt="image" src="https://github.com/user-attachments/assets/6a84f388-e491-4dde-81ab-164a841b8a07" />
 
+![alt text](https://github.com/vpapador/Presentation/blob/a810e5aa5ee79285fce12885f67838dbd91925fb/beta_unweighted.png)
 
 
 
@@ -652,8 +663,11 @@ ordination_TR = ordinate(ps.rarefied, method="PCoA", distance=wunifrac_dist_TR)
 plot_ordination(ps.rarefied, ordination_TR, color="Biome") + theme(aspect.ratio=1)
 ```
 
-<img width="821" height="687" alt="image" src="https://github.com/user-attachments/assets/cb7d4a6c-1de0-430f-82fe-341010149e2a" />
 
+
+
+
+![alt text](https://github.com/vpapador/Presentation/blob/a810e5aa5ee79285fce12885f67838dbd91925fb/pca_weighted.png)
 
 
 
@@ -693,7 +707,11 @@ ggplot(wunifrac_within_TR, aes(x = Biome1, y = Distance)) +
   ggtitle("Within-biome β diversity")
 ```
 
-<img width="920" height="687" alt="image" src="https://github.com/user-attachments/assets/56884314-12f4-4c97-8664-ac02dfc6d919" />
+
+
+
+![alt text](https://github.com/vpapador/Presentation/blob/a810e5aa5ee79285fce12885f67838dbd91925fb/beta_weighted.png)
+
 
 
 
