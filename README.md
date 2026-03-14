@@ -976,9 +976,25 @@ plot_bar(ps.study, fill = "Phylum") +
 Με το διάγραμμα αυτό προκύπτει αφθονία/sample σε κάθε Biome
 
 
-test
 
 
+
+![alt text](https://github.com/vpapador/Presentation/blob/58490712f6b20da68544311f373b474fd53a8deb/sample_biome_ab.png)
+
+
+
+
+
+Ωστόσο, επειδή τα samples είναι 500 σκέφτηκα να τα χωρίσω ανά study
+```
+ps.phylum5 <- tax_glom(ps.study, taxrank = "Phylum")
+# long format
+df <- psmelt(ps.phylum5)  # Phylum, Abundance, Sample, sample_data
+ggplot(df, aes(x = factor(study_id), y = Abundance, fill = Phylum)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~Biome, scales = "free_x", nrow = 1) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
 
 
 
