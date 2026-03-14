@@ -1034,6 +1034,44 @@ ggplot(df, aes(x = Biome, y = Abundance, fill = Phylum)) +
 
 
 
+Βρίσκω ποια ήταν τα πιο άφθονα φύλα
+
+```
+R
+df_summary <- df %>%
+  group_by(Biome, Phylum) %>%
+  summarise(TotalAbundance = sum(Abundance))
+
+df_summary
+
+library(tidyr)
+df_wide <- df_summary %>%
+  pivot_wider(names_from = Phylum, values_from = TotalAbundance, values_fill = 0)
+
+df_wide
+
+top10_phyla <- df %>%
+  group_by(Phylum) %>%            # Ομαδοποιούμε ανά Phylum
+  summarise(TotalAbundance = sum(Abundance)) %>%  # Άθροιση όλων των Biome
+  arrange(desc(TotalAbundance)) %>%  # Ταξινόμηση από τη μεγαλύτερη
+  slice_head(n = 10)                 # Επιλέγουμε τα 10 πρώτα
+
+top10_phyla
+```
+
+| Rank | Phylum            | Total Abundance |
+| ---- | ----------------- | --------------- |
+| 1    | Pseudomonadota    | 1,021,307       |
+| 2    | Acidobacteriota   | 612,644         |
+| 3    | Verrucomicrobiota | 382,436         |
+| 4    | Actinomycetota    | 278,030         |
+| 5    | Bacteroidota      | 263,392         |
+| 6    | Bacillota         | 107,735         |
+| 7    | Planctomycetota   | 93,645          |
+| 8    | Chloroflexota     | 86,442          |
+| 9    | Gemmatimonadota   | 83,936          |
+| 10   | Cyanobacteriota   | 30,380          |
+
 
 
 
