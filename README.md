@@ -1007,7 +1007,23 @@ ggplot(df, aes(x = factor(study_id), y = Abundance, fill = Phylum)) +
 
 
 
+Και τώρα το κάνω και ανά Biome
+```
+R
+library(phyloseq)
+library(ggplot2)
+library(dplyr)
 
+ps.biome <- merge_samples(ps.rarefied2, "Biome")
+sample_data(ps.biome)$Biome <- rownames(sample_data(ps.biome))
+df <- psmelt(ps.biome) 
+ggplot(df, aes(x = Biome, y = Abundance, fill = Phylum)) +
+  geom_bar(stat = "identity") +
+  theme_minimal() +
+  ylab("Abundance") +
+  xlab("Biome") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
 
 
 
