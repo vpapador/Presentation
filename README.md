@@ -1025,7 +1025,10 @@ ggplot(df, aes(x = Biome, y = Abundance, fill = Phylum)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ```
 
-![alt text]
+
+
+
+![alt text](https://github.com/vpapador/Presentation/blob/a8fa8adb273e2a2d8b2090b7345fd0738bc1857c/samples_biome.png)
 
 
 
