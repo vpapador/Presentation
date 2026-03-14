@@ -297,7 +297,7 @@ for (size in names(subsets)) {
 
 ### Tag Sequences- Rarefaction
 #### Πρόβλημα που πρέπει να λυθεί- δεύτερη γνώμη
-Εδώ αντιμετώπισα μία δυσκολία. Το paper αναφέρει ότι δούλεψαν με ASVs και καταλαβαίνω ότι είναι τα Tag seq με deblur90bp. Ωστόσο, έχουν και δεδομένα από Silva και Greengenes. Εγώ πιστεύω ότι είναι το taxonomy των OTUs αυτό και όχι το taxonomy των ASVs ωστόσο δεν είμαι βέβαιη και δεν το διευκρινίζει. Από την άλλη οι αλληλουχίες fasta είναι διαφορετικές και για τα 3 .biome. Μπορώ να δουλέψω αποκλειστικά με τα tag seq έτσι και αλλιώς σε επίπεδο ~ είδους, αλλά για να δουλέψω σε μεγαλύτερες τάξεις πρέπει να λυθεί. Προσωρινά, έλυσα το πρόβλημα χρησιμοποιώντας το vsearch στο bash όπου έκανα εκ νέου taxonomy στα ASVs, απλά δεν ξέρω αν αυτό είναι σωστό δεδομένουν ότι έχω μόνο 90bp. Χρησιμοποίησα την Silva.
+Εδώ αντιμετώπισα μία δυσκολία. Το paper αναφέρει ότι δούλεψαν με ASVs και καταλαβαίνω ότι είναι τα Tag seq με deblur90bp. Ωστόσο, έχουν και δεδομένα από Silva και Greengenes. Εγώ πιστεύω ότι είναι το taxonomy των OTUs αυτό και όχι το taxonomy των ASVs ωστόσο δεν είμαι βέβαιη και δεν το διευκρινίζει. Παρακάτω ωστόσο δίνει ASVs taxonomy - tradng cards using green genes database με το taxonomy των deblur90bp αλλά μόνο στα 2000 subset. Από αυτά τα 2000, εντοπίζονται 20/500 δικά μου άρα αυτό είναι ένα πρόβλημα. Έκανα μια αναγνώριση και αντιστοίχιση των αλληλουχιών μου και υπάρχουν ταξινομημένες ~40000 από τις ~70000 αλληλουχίες. Έτσι, αποφάσισα να λύσω το πρόβλημα χρησιμοποιώντας vsearch και silva database. Αναγνώρισα επιπλέον ~20.000 αλληλουχίες και έτσι έχω περίπου 60000 ταξινομημένες. Ωστόσο, δεν ξέρω αν μπορώ όντως να κάνω vsearch σε 90 μόνο βάσεις, δεν ξέρω αν είναι σωστό.
 
 #### Sequencing depths- phyloseq
 Για να μπορέσω να προχωρήσω σε στατιστική ανάλυση, πρέπει να κάνω κανονικοποίηση. Επιλέγω να δημιουργήσω phyloseq object και να δουλέψω στην R. Έχω αποθηκεύσει το subset_500.csv και πάω στην Python. Από εκεί θα απομονώσω από το αρχικό .biom deblur_90bp μόνο τα 500 samples
@@ -340,6 +340,8 @@ library("ggplot2")
 library("permute")
 library("vegan")
 library("biomformat")
+library(tidyr)
+library(dplyr)
 #περιέχει τα 500 samples, και τις αλληλουχίες tag που εντοπίζονται μόνο στα 500
 
 subset_final<- read.table(file.choose(), header = TRUE, sep = "\t")
@@ -767,6 +769,212 @@ vsearch --usearch_global emp.90.min25.deblur.seq.fasta \
         --blast6out fixed_silva1.txt \
         --strand plus --threads 4
 ```
+
+Στην συνέχεια εισάγω το αρχείο που έχει προκύψει στην R. Όμως, περιέχονται όλες οι αλληλουχίες γιατί στην silva έδωσα το emp.90.min25.deblur.seq.fasta χωρίς να φιλτράρω. Επομένως πρέπει να κρατήσω τα taxonomy που αντιστοιχούν στα δικά μου samples. 
+```
+R
+fixed_silva1<- read.table(file.choose(), header = TRUE, sep = "\t")
+#κρατάω μόνο τις πρώτες 2 στήλες
+fixed_silva2 <- fixed_silva1[, 1:2]
+#και φιλτράρω για μεγαλύτερη ευκολία με το mat
+fixed_silva2_filtered <- fixed_silva2[fixed_silva2[,1] %in% rownames(mat), ]
+#μετατρέπω σε dataframe με rows
+taxa_mat <- data.frame(OTU_taxonomy = fixed_silva2_filtered[,2],
+                      row.names = fixed_silva2_filtered[,1],
+                      stringsAsFactors = FALSE)
+```
+Το data frame έχει όλο το taxonomy μαζί. Δεν είμαι σίγουρη εάν τα taxa είναι με την σειρά, αλλά θα κάνω έναν πρώτο διαχωρισμό και ότι προκύψει θα το φιλτράρω αργότερα
+
+```
+R
+split_tax <- strsplit(as.character(taxa_mat$OTU_taxonomy), "\\|")
+accession <- sapply(split_tax, `[`, 1)
+taxonomy <- sapply(split_tax, `[`, 2)
+otu_mat2 <- data.frame(Accession = accession,
+                       OTU_taxonomy = taxonomy,
+                       row.names = rownames(taxa_mat),
+                       stringsAsFactors = FALSE)
+
+
+otu_df <- otu_mat2 %>%
+  mutate(TagSeq = rownames(otu_mat2)) %>%
+  select(TagSeq, Accession, OTU_taxonomy)
+
+otu_df_sep <- otu_df %>%
+  separate(OTU_taxonomy,
+           into = c("Kingdom","Phylum","Class","Order","Family","Genus","Species"),
+           sep = ";",
+           fill = "right")  # γεμίζει με NA αν λείπουν επίπεδα
+
+
+tax_cols <- c("Kingdom","Phylum","Class","Order","Family","Genus","Species")
+
+# Αντικατάσταση με NA αν:
+# - δεν ξεκινάει με κεφαλαίο γράμμα
+# - περιέχει "-"
+# - περιέχει αριθμό
+otu_df_clean <- otu_df_sep %>%
+  mutate(across(all_of(tax_cols), ~ ifelse(
+    !grepl("^[A-Z]", .x) | grepl("-", .x) | grepl("[0-9]", .x),
+    NA,
+    .x
+  )))
+
+```
+Τώρα έχω φτιάξει ένα taxonomy table για τα δεδομένα από το Vsearch. Εξετάζω το αρχείο με την δική τους ταξινόμηση
+
+```
+R
+otu_summary.emp_deblur_90bp.subset_2k.rare_5000 <- read.delim(file.choose(), header = TRUE, sep = "\t", quote = "", stringsAsFactors = FALSE, fill = TRUE, comment.char = "")
+head(otu_summary.emp_deblur_90bp.subset_2k.rare_5000)
+```
+Απομονώνω μόνο εκείνα τα tagseq που είναι στο phyloseq object μου
+```
+R
+taxa_ids <- rownames(otu_table(ps.rarefied1))
+head(taxa_ids)
+otu_summary.filtered <- 
+  otu_summary.emp_deblur_90bp.subset_2k.rare_5000[
+    otu_summary.emp_deblur_90bp.subset_2k.rare_5000$sequence %in% taxa_ids,
+  ]
+```
+Κάνω σύγκριση για το πόσες αλληλουχίες υπάρχουν ταξινομημένες από αυτές που έχω εγώ στα rarefied δεδομένα. Το αποτέλεσμα που παίρνω είναι 43069. Κάνω και σύγκριση μεταξύ των 2 πινάκων ταξινόμησης - vsearch και το δικό τους και υπάρχουν ~20000 κοινές αλληλουχίες 
+```
+R
+dim(fixed_silva2_filtered)
+head(fixed_silva2_filtered,1)
+head(otu_summary.filtered,1)
+View(otu_summary.filtered)
+seq_summary <- otu_summary.filtered$sequence
+seq_vsearch <- fixed_silva2_filtered[,1]
+length(intersect(seq_summary, seq_vsearch))
+```
+Από περιέργεια ελέγχω πόσα από τα 500 samples μου βρίσκονται στα 2000 samples του subset τους
+```
+R
+emp_qiime_mapping_subset_2k_20170912 <- read.delim(file.choose(), header = TRUE, sep = "\t", quote = "", stringsAsFactors = FALSE, fill = TRUE, comment.char = "") 
+samples_phyloseq <- colnames(otu_table(ps.rarefied1))
+samples_subset <- emp_qiime_mapping_subset_2k_20170912$X.SampleID
+samples_subset <- paste0("X", samples_subset)
+length(intersect(samples_phyloseq, samples_subset))
+#μόνο 28 από τα 500 samples εντοπίζονται στο 2000 subset
+```
+Θέλω να καθαρίσω τα δεδομένα μου για να είμαι σίγουρη ότι δεν έχω κάνει κάποιο λάθος κατά το vsearch. Το κύριο λάθος που μπορεί να προέκυψε είναι να έγινε ταξινόμηση με κάποιον ευκαρυωτικό οργανισμό ενώ γνωρίζω ότι στα δείγματα έχω μόνο βακτήρια και αρχαία.
+```
+R
+#τώρα αφαιρώ τα eukarytoa γιατί ξέρω ότι είναι σίγουρα λάθος
+unique(otu_df_clean$Kingdom)
+otu_df_clean_no_euk <- otu_df_clean[otu_df_clean$Kingdom != "Eukaryota", ]
+dim(otu_df_clean_no_euk)
+#αφαιρέθηκε μόνο ένα
+unique(otu_df_clean_no_euk$Kingdom)
+```
+Φτιάχνω το δικό τους dataset ώστε να το ενώσω με το δικό μου
+```
+R
+vsearch_taxo<-otu_df_clean_no_euk
+#από το δικό τους κρατάω μόνο 2 στήλες
+otu_subset <- otu_summary.filtered[, c("sequence", "taxonomy")]
+taxonomy_split <- do.call(rbind, strsplit(as.character(otu_summary.filtered$taxonomy), "; "))
+
+# Μετονομάζουμε τις στήλες
+colnames(taxonomy_split) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+
+# Προσθέτουμε στο αρχικό dataframe
+otu_summary_split <- cbind(otu_summary.filtered["sequence"], taxonomy_split)
+otu_summary_split[] <- lapply(otu_summary_split, function(x) gsub("^[a-z]__","", x))
+```
+
+Σε αυτό το σημείο έκανα έναν έλεγχο για να δω εάν η στήλη Phylum ήταν η ίδια για τα 2 dataset για τις αλληλουχίες που είχαν κενές. Όμως, η gg βάση τουλάχιστον μέχρι τότε ακολουθούσε την παλιά ταξινόμηση οπότε τα ονόματα είχαν άλλες καταλήξεις και είχαν εντελώς αναντιστοιχία. Δεν βάζω τον κώδικα. Περνάω κατευθείαν στην επεξεργασία του δικού μου dataset ώστε να κάνω την συνένωση.
+```
+R
+#Κάνω το vsearch σε ίδια δομή με το άλλο
+colnames(vsearch_taxo)[colnames(vsearch_taxo) == "TagSeq"] <- "sequence"
+vsearch_taxo <- vsearch_taxo[, !colnames(vsearch_taxo) %in% "Accession"]
+# Κρατάμε όλες τις γραμμές από vsearch_taxo που δεν υπάρχουν στο otu_summary_split_subset
+vsearch_only_df <- vsearch_taxo[!(vsearch_taxo$sequence %in% otu_summary_split_subset$sequence), ]
+
+# Έλεγχος
+head(vsearch_only_df)
+dim(vsearch_only_df)  # πόσες γραμμές είναι μόνο στο vsearch
+# Όλα τα column names που θέλουμε
+cols_to_keep <- colnames(otu_summary_split)
+# Βεβαιωνόμαστε ότι όλες οι στήλες υπάρχουν στο vsearch_only_df
+for (col in cols_to_keep) {
+  if (!(col %in% colnames(vsearch_only_df))) {
+    vsearch_only_df[[col]] <- NA  # αν λείπει η στήλη, την δημιουργούμε με NA
+  }
+}
+# Τώρα ευθυγραμμίζουμε τις στήλες με την ίδια σειρά
+vsearch_only_aligned <- vsearch_only_df[, cols_to_keep]
+otu_summary_complete <- rbind(otu_summary_split, vsearch_only_aligned)
+# Έλεγχος
+dim(otu_summary_complete)
+head(otu_summary_complete)
+num_unique_seqs <- length(unique(otu_summary_complete$sequence))
+```
+Από εδώ θα κάνω έναν έλεγχο στα Phylum, γιατί κάποια όπως είπα είναι συνώνυμα και ακολουθούν την παλιά ονοματολογία, αλλά και να αφαιρέσω τα tagseq που στην πραγματικότητα δεν έχουν ταξινομηθεί και έχουν συμπληρωθεί με ΝΑ ή σύμβολα
+```
+R
+unique_phylum <- unique(otu_summary_complete$Phylum)
+length(unique_phylum)
+unique_phylum_df <- data.frame(Phylum =unique_phylum)
+library(writexl)
+write_xlsx(unique_phylum_df, path = "unique_phylum.xlsx")
+```
+Ακολουθεί φιλτράρισμα στο excel, όπου γκούγκλαρα όλα τα φύλα για να σιγουρευτώ ότι πράγματι αυτά με τις διαφορετικές καταλήξεις είναι παλιές/καινούργιες ονομασίες
+```
+R
+#περιέχει μία Phylum στήλη
+phyla<-read.table("clipboard", sep="\t", header=TRUE)
+```
+Τώρα, ζητάω να κρατήσω μόνο τις σωστές σειρές με τα Phylum
+```
+R
+otu_summary_subset_phyla <- otu_summary_complete[
+  otu_summary_complete$Phylum %in% phyla$Phylum,
+]
+```
+Και πλέον μπορώ να αντικαταστήσω τα συνώνυμα
+```
+R
+replace<-read.table("clipboard", sep="\t", header=TRUE)
+idx <- match(otu_summary_subset_phyla$Phylum, replace$Phylum)
+otu_summary_subset_phyla$Phylum[!is.na(idx)] <- replace$Replace[idx[!is.na(idx)]]
+# βάζουμε τα sequence ως rownames
+rownames(otu_summary_subset_phyla) <- otu_summary_subset_phyla$sequence
+# αφαιρούμε τη στήλη sequence
+otu_summary_subset_phyla$sequence <- NULL
+```
+Φτιάχνω phyloseq object για τα phylum
+```
+R
+ps.rarefied2<-ps.rarefied1
+ps.rarefied2
+tax_table(ps.rarefied2) <- tax_table(otu_summary_subset_phyla)
+ps.rarefied2 <- prune_taxa(taxa_names(ps.rarefied2) %in% rownames(otu_summary_subset_phyla), ps.rarefied2)
+tax_table(ps.rarefied2) <- tax_table(as.matrix(otu_summary_subset_phyla))
+```
+Τώρα θέλω να φτιάξω ένα διάγραμμα αφθονιών Phyla/Biome
+```
+R
+ps.rarefied4<-ps.rarefied2
+sample_data(ps.rarefied4)$study_biome <- paste(
+  sample_data(ps.rarefied4)$study_id,
+  gsub(" ", "_", sample_data(ps.rarefied4)$Biome),
+  sep = "_"
+)
+ps.study <- merge_samples(ps.rarefied4, "study_biome")
+sd <- data.frame(sample_data(ps.rarefied4))
+sd_unique <- sd[!duplicated(sd$study_biome), ]
+rownames(sd_unique) <- sd_unique$study_biome
+sample_data(ps.study) <- sample_data(sd_unique[sample_names(ps.study), ])
+
+plot_bar(ps.study, fill = "Phylum") +
+  facet_wrap(~Biome, scales = "free_x", nrow = 1)
+```
+Με το διάγραμμα αυτό προκύπτει αφθονία/sample σε κάθε Biome
+
 
 test
 
