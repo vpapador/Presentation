@@ -768,3 +768,9 @@ vsearch --usearch_global emp.90.min25.deblur.seq.fasta \
         --strand plus --threads 4
 ```
 
+
+
+
+
+
+
