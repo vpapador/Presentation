@@ -1091,6 +1091,15 @@ top10_phyla
 | 10   | Cyanobacteriota   | 30,380          |
 
 
+# Διορθώσεις
+- Πρέπει να κάνω rarefaction σε ταξινομικό επίπεδο- επίπεδο Φύλου
+- Scopus: a communal catalogue reveals earth’s multiscale microbial diversity και μετά φίλτρο στην αναζήτηση των citation "soil" και μετά επιλέγω "microbial community"
+- Πρέπει να ψάξω αν η β ποικιλότητα είναι similarity ή dissimilarity
+- venn diagram σε επίπεδο φύλου
+- α και β ποικιλότητες σε επίπεδο φύλου
+- heatmap? σε επίπεδο φύλου ιδανικά σε όλα τα samples
+- ίσως όπως κάναμε τα gene expression trends κάτι παρόμοιο για τα μικρόβια για να δω συνεμφάνιση
+- δίκτυα
 
 
 
