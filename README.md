@@ -538,7 +538,7 @@ alpha_meta <- alpha_meta %>% select(-FaithPD.x, -FaithPD.y)
 ```
 
 
-<img width="1106" height="633" alt="image" src="https://github.com/user-attachments/assets/87382e81-7c33-4663-b83c-88be0c711302" />
+
 
 ![alt text](https://github.com/vpapador/Presentation/blob/a810e5aa5ee79285fce12885f67838dbd91925fb/alpha_div.png)
 
