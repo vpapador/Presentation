@@ -1103,7 +1103,7 @@ top10_phyla
 
 
 
-
+![alt text](https://github.com/vpapador/Presentation/blob/970925c887e9d3fdd5edd1ab31c156ed2e1555ac/level-2-bars.svg)
 
 
 
